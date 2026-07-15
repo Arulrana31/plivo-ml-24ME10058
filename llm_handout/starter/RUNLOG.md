@@ -115,4 +115,9 @@ At this point the deadline got tighter and we stopped testing things in isolatio
 Each of these three was already tested on its own, individually, before this run: Run 8 (RoPE only, bpb 1.7554), Run 10 (Muon only, bpb 1.7374), Run 9 (WSD only, bpb 1.7575) - all three beat the Run 6 base (1.7863) independently. This run is the first time they're combined.
 Change: `--rope 1 --optimizer muon --schedule wsd`, batch 32, on top of Run 6.
 Hypothesis: they're independent changes (positional encoding, optimizer, LR schedule) touching different parts of the system, so should stack rather than fight each other.
-Result: dev bpb **1.7328** - beats every individual run (Muon alone 1.7374, RoPE alone 1.7554, WSD alone 1.7575, base 1.7863). n_params 1,892,800, steps 2000, both caps satisfied. The hypothesis held: none of the three fought each other, and stacking beat every one of them on its own. This is the final submitted checkpoint (`ckpt.pt`).
+Result: dev bpb **1.7328** - beats every individual run (Muon alone 1.7374, RoPE alone 1.7554, WSD alone 1.7575, base 1.7863). n_params 1,892,800, steps 2000, both caps satisfied. The hypothesis held: none of the three fought each other, and stacking beat every one of them on its own. Superseded below by adding batch 64 on top.
+
+## Final v2 - batch 64 added on top of the RoPE + Muon + WSD stack
+Change: `--batch 64` on top of the run above (was batch 32).
+Hypothesis: batch was the second-biggest isolated win early on (Run 6, batch 8 to 32), worth pushing further now that it's stacked with the other three winners too. Corpus is ~3.41M BPE tokens, so this run sees (2000x64x128)/3.41M ≈ 4.8 epochs - just past Muennighoff's "negligible cost" 4-epoch mark, still well short of the ~16-epoch danger zone.
+Result: dev bpb 1.7328 → **1.6777** (-3.2%). New best, by a clear margin - beats every prior run. This is the final submitted checkpoint (`ckpt.pt`).
