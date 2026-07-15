@@ -1,5 +1,7 @@
 # Plivo LLM Speedrun Submission
 
+**Dev bpb: 1.7328** (baseline 2.3718, −26.9%), 1,892,800 params, 2000 optimizer steps.
+
 Deliverables are in [`llm_handout/starter/`](llm_handout/starter/):
 
 - `ckpt.pt` — final checkpoint (2000 steps, 1,892,800 params, dev bpb 1.7328)
