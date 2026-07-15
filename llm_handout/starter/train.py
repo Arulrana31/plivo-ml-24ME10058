@@ -36,8 +36,7 @@ def get_lr(step, total_steps, warmup_steps, peak_lr, min_lr,
     if step < warmup_steps:
         return peak_lr * step / max(1, warmup_steps)
     if schedule == "wsd":
-        # Warmup-Stable-Decay (MiniCPM, arXiv:2404.06395): stable at peak_lr for most of
-        # training, then exponential anneal to min_lr over the last decay_frac of steps.
+        # stays at peak_lr, then decays to min_lr over the last decay_frac of steps
         decay_start = total_steps * (1 - decay_frac)
         if step < decay_start:
             return peak_lr
@@ -104,8 +103,7 @@ def main():
 
     min_lr = args.lr * args.min_lr_ratio
     if args.optimizer in ("muon", "normuon"):
-        # Muon/NorMuon for >=2D hidden weights (attention qkv/proj, mlp linears); AdamW for
-        # everything else (tok_emb, pos_emb, head, LayerNorm/RMSNorm, biases).
+        # Muon/NorMuon on the hidden 2D weights, AdamW on everything else
         muon_params, adamw_params = [], []
         for name, p in model.named_parameters():
             is_hidden_2d = p.ndim == 2 and not any(

@@ -17,11 +17,8 @@ class Config:
     n_embd = 160
     dropout = 0.0
     tie_weights = False   # <- one of many things worth questioning
-    qk_norm = False       # RMSNorm(q), RMSNorm(k) per head before dot-product (Qwen3/Gemma3-style;
-                           # see RUNLOG Run 7 — cites Henry et al. 2020 arXiv:2010.04245 for the
-                           # original QKNorm and Anson & Aitchison arXiv:2511.21377 for context)
-    rope = False           # rotary position embeddings (Su et al. arXiv:2104.09864) instead of a
-                           # learned absolute pos_emb table
+    qk_norm = False       # RMSNorm on q/k before attention, tested in Run 7
+    rope = False           # rotary position embeddings instead of learned pos_emb, tested in Run 8
 
 
 class RMSNorm(nn.Module):
@@ -51,7 +48,7 @@ class SelfAttention(nn.Module):
 
         self.rope = cfg.rope
         if self.rope:
-            # theta_j = 1 / 10000^(2j/head_dim), j = 0..head_dim/2-1 (Su et al. eq. 15)
+            # standard RoPE frequency schedule
             inv_freq = 1.0 / (10000 ** (torch.arange(0, self.head_dim, 2).float() / self.head_dim))
             t = torch.arange(cfg.block_size).float()
             freqs = torch.outer(t, inv_freq)  # (block_size, head_dim/2)
@@ -59,8 +56,7 @@ class SelfAttention(nn.Module):
             self.register_buffer("rope_sin", freqs.sin(), persistent=False)
 
     def _apply_rope(self, x):
-        # x: (B, n_head, T, head_dim). Split-half rotate_half formulation, equivalent to the
-        # per-pair 2x2 rotation matrix [[cos,-sin],[sin,cos]] (Su et al. / standard RoPE impls).
+        # rotate_half formulation, same math as the usual RoPE rotation matrix
         T, D = x.size(2), x.size(-1)
         x1, x2 = x[..., :D // 2], x[..., D // 2:]
         cos = self.rope_cos[:T][None, None, :, :]
@@ -117,10 +113,7 @@ class GPT(nn.Module):
         self.apply(self._init)
 
     def _init(self, m):
-        # baseline init: plain normal, one std for everything. (GPT-2/muP-
-        # style scaled init was tried and reverted — see RUNLOG Run 2: it
-        # underperforms this flat init at 2000-step horizon across a 5x LR
-        # sweep.)
+        # flat init, one std for everything. Scaled init was tried in Run 2 and lost.
         if isinstance(m, (nn.Linear, nn.Embedding)):
             nn.init.normal_(m.weight, mean=0.0, std=0.05)
             if isinstance(m, nn.Linear) and m.bias is not None:

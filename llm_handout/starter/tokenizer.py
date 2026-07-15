@@ -1,23 +1,9 @@
-"""Byte-level BPE tokenizer, trained from scratch (pure Python stdlib) on
-train_corpus.txt only. Falls back to raw bytes for anything not covered by a
-merge, so it stays LOSSLESS on arbitrary UTF-8 exactly like the baseline
-ByteTokenizer:
-
-  1. Pre-tokenize text into script/whitespace/punctuation runs (Unicode
-     category based, not just ASCII \\w) so Devanagari consonant+matra
-     clusters aren't split apart the way a plain \\w regex would split them.
-  2. Each run is UTF-8-encoded to bytes (base vocab = 256 raw byte values —
-     this is what guarantees the byte fallback / losslessness).
-  3. Greedily apply learned BPE merges within each run, in trained order.
-
-decode() just concatenates each token's fixed byte string and UTF-8-decodes
-the result — since every token id always maps to the same byte string and
-merges never destroy bytes, concatenation always reconstructs the exact
-original bytes, so decode(encode(text)) == text unconditionally.
-
-Merges are learned once (see train_and_save at the bottom / `python
-tokenizer.py`) and cached in `bpe_merges.json` next to this file, loaded with
-no internet access, resolved relative to __file__.
+"""Byte-level BPE tokenizer, trained from scratch on train_corpus.txt. Base vocab is
+the 256 raw bytes, so anything not covered by a merge just falls back to individual
+bytes — that's what keeps it lossless on any UTF-8 input. Pre-tokenizer splits by
+Unicode category, not plain \\w, since \\w doesn't match Devanagari matras and was
+fragmenting Hindi text. Merges are trained once and cached in bpe_merges.json next
+to this file.
 """
 import json
 import unicodedata
@@ -56,9 +42,8 @@ def _raw_chunks(text):
 
 
 def pretokenize(text):
-    """Split text into chunks that concatenate back to `text` exactly.
-    A single trailing space of a whitespace run is attached to the next
-    word/other chunk (GPT-2 style) so common " word" pairs can merge."""
+    # splits into chunks that concatenate back to the exact input; a trailing
+    # space gets attached to the next word so " word" pairs can merge (GPT-2 style)
     chunks = _raw_chunks(text)
     out = []
     i, n = 0, len(chunks)
@@ -78,11 +63,8 @@ def pretokenize(text):
 
 
 def train_bpe(text, vocab_size):
-    """Byte-pair-encode merge learning, restricted to pairs inside a single
-    pretokenize() chunk. Uses word-frequency counting (not raw byte-stream
-    scanning) with incremental pair-count updates, so it stays fast: only
-    words containing the merged pair are touched per merge, not the whole
-    corpus."""
+    # learns merges from word frequencies, not a raw byte-stream scan, so each
+    # merge only touches the words that actually contain the pair, not the whole corpus
     words = pretokenize(text)
     freq = collections.Counter(words)
     uniq_words = list(freq.keys())
@@ -202,9 +184,7 @@ def _asset_path():
 
 
 def load(path=None):
-    """Return the tokenizer used by train.py and evaluate.py. Loads the
-    merges trained by train_and_save() from a JSON file saved next to this
-    module; no internet, no args required."""
+    # loads the merges cached by train_and_save() - no args needed, no internet
     asset = _asset_path() if path is None else Path(path)
     with open(asset, encoding="utf-8") as f:
         payload = json.load(f)

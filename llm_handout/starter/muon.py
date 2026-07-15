@@ -1,11 +1,6 @@
-"""Muon optimizer (Keller Jordan et al., https://kellerjordan.github.io/posts/muon/,
-reference impl https://github.com/KellerJordan/Muon/blob/master/muon.py) for >=2D
-hidden-layer weight matrices. Pure PyTorch matmuls (Newton-Schulz iteration) — no
-custom/compiled kernels, no external optimizer library.
-
-Coefficients, momentum update, and the row/col LR-scaling factor below are copied
-verbatim from the reference implementation (verified against the upstream source,
-not reconstructed from memory) — only bfloat16 is dropped since we're CPU-only.
+"""Muon optimizer for >=2D hidden-layer weight matrices. Newton-Schulz orthogonalization,
+plain PyTorch matmuls, no custom kernels. Ported from Keller Jordan's reference impl,
+just dropped the bfloat16 cast since we're CPU-only.
 """
 import torch
 
@@ -69,14 +64,9 @@ class Muon(torch.optim.Optimizer):
 
 def normuon_update(grad, momentum, second_momentum, beta=0.95, beta2=0.95,
                     ns_steps=5, nesterov=True):
-    """RUNLOG Run 12 — NorMuon (Li et al., arXiv:2510.05491, reference impl
-    github.com/zichongli5/NorMuon/blob/main/normuon.py, fetched verbatim via raw.githubusercontent
-    to avoid transcription drift — an earlier WebFetch AI-summary of the same paper mis-stated the
-    rescaling step as an absolute '0.2*lr*sqrt(mn)/frobenius-norm' formula; the real reference code
-    instead rescales to exactly preserve the pre-normalization Frobenius norm, which is what's
-    implemented below). Adds row-wise (per-neuron) second-moment normalization AFTER Muon's
-    Newton-Schulz orthogonalization, to fix uneven per-neuron update norms that plain Muon produces.
-    """
+    # NorMuon: same as Muon, but adds row-wise (per-neuron) second-moment normalization
+    # after the Newton-Schulz step, then rescales back to the original Frobenius norm.
+    # Fixes the uneven per-neuron update norms plain Muon produces.
     momentum.lerp_(grad, 1 - beta)
     update = grad.lerp_(momentum, beta) if nesterov else momentum
     if update.ndim == 4:
