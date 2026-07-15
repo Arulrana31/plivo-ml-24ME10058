@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>2,000-Step LLM Speedrun — Summary</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #666; --border: #ddd;
+    --win: #1a7f37; --lose: #c0392b; --card: #f7f7f8; --accent: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161a; --fg: #e8e8e8; --muted: #9aa0a6; --border: #333;
+             --win: #4ade80; --lose: #f87171; --card: #1e2126; --accent: #60a5fa; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--fg); font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    max-width: 980px; margin: 0 auto; padding: 2rem 1.25rem 4rem; line-height: 1.55;
+  }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.25rem; margin-top: 2.5rem; border-bottom: 1px solid var(--border); padding-bottom: .4rem; }
+  .subtitle { color: var(--muted); margin-top: 0; }
+  .badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .78rem; font-weight: 600; }
+  .badge.win { background: color-mix(in srgb, var(--win) 18%, transparent); color: var(--win); }
+  .badge.lose { background: color-mix(in srgb, var(--lose) 18%, transparent); color: var(--lose); }
+  .badge.pending { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .92rem; }
+  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .02em; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; margin: 1rem 0; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1rem; }
+  .card .num { font-size: 1.4rem; font-weight: 700; }
+  .card .label { color: var(--muted); font-size: .8rem; }
+  code { background: var(--card); padding: .1rem .35rem; border-radius: 5px; font-size: .88em; }
+  .note { background: var(--card); border-left: 3px solid var(--accent); padding: .8rem 1rem; border-radius: 6px; margin: 1rem 0; }
+  .final-flag { background: color-mix(in srgb, var(--win) 12%, transparent); border: 1px solid var(--win);
+                border-radius: 10px; padding: 1rem 1.2rem; margin: 1rem 0; }
+</style>
+</head>
+<body>
+
+<h1>2,000-Step LLM Speedrun — Summary</h1>
+<p class="subtitle">Bits-per-byte (bpb) minimization under a 2,000-optimizer-step / 2,000,000-parameter cap, CPU-only, pure PyTorch. See <code>RUNLOG.md</code> for the full run-by-run trail and <code>NOTES.md</code> for the condensed writeup.</p>
+
+<div class="final-flag">
+  <strong>Final submitted checkpoint.</strong><br>
+  Best config: RoPE + Muon + WSD schedule, stacked on top of the batch-32/BPE-tokenizer base &mdash;
+  dev bpb <strong>1.7328</strong> (baseline was 2.3718 &mdash; &minus;26.9% relative).
+</div>
+
+<h2>Best configuration &amp; why</h2>
+<div class="cards">
+  <div class="card"><div class="num">1,892,800</div><div class="label">parameters (cap: 2,000,000)</div></div>
+  <div class="card"><div class="num">2000</div><div class="label">optimizer steps (cap: 2000)</div></div>
+  <div class="card"><div class="num">1.7328</div><div class="label">dev bpb (lower = better)</div></div>
+  <div class="card"><div class="num">4 / 4 / 160</div><div class="label">layers / heads / n_embd</div></div>
+</div>
+<ul>
+  <li><strong>Tokenizer:</strong> from-scratch byte-level BPE (vocab 2048), trained only on <code>train_corpus.txt</code>, Unicode-category-aware pre-tokenization (fixes Devanagari matra/virama fragmentation that plain <code>\w</code> regex splitting causes), byte-level fallback base vocab &mdash; structurally lossless on arbitrary UTF-8 by construction.</li>
+  <li><strong>Positional encoding:</strong> RoPE instead of a learned absolute position table &mdash; better bpb and 20,480 fewer params (Run 8).</li>
+  <li><strong>Optimizer:</strong> Muon (Newton-Schulz orthogonalized updates) on the hidden 2D weights, AdamW on everything else &mdash; the single biggest individual win of the project (Run 10).</li>
+  <li><strong>Schedule:</strong> WSD (warmup-stable-decay) &mdash; beat cosine decay by holding LR high longer before a sharp final decay (Run 9).</li>
+  <li><strong>Batch size:</strong> 32 (up from the baseline's 8) &mdash; the step budget is the binding constraint, not compute, so more distinct tokens per step matters more than gradient-noise reduction.</li>
+  <li><strong>Architecture:</strong> unchanged 4-layer/4-head/160-dim transformer, untied input/output embeddings (weight tying was tested twice, at two vocab sizes, and rejected both times &mdash; see RUNLOG Runs 3 &amp; 5), flat N(0, 0.05) init (GPT-2/muP-style scaled init was tested and rejected &mdash; see Run 2).</li>
+  <li><strong>Stacking:</strong> RoPE, Muon, and WSD were each validated individually first, then combined in one final run &mdash; the combination beat every individual result cleanly, with no interference between the three changes.</li>
+</ul>
+
+<h2>Run history</h2>
+<table>
+<thead><tr><th>Run</th><th>Change</th><th>Dev bpb</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>0</td><td>Baseline (unmodified starter)</td><td>2.3718</td><td><span class="badge pending">reference</span></td></tr>
+<tr><td>1</td><td>LR warmup + cosine decay, AdamW + weight decay, grad clip</td><td>2.3718 → 2.1904</td><td><span class="badge win">WIN −7.6%</span></td></tr>
+<tr><td>2</td><td>GPT-2/muP-style scaled init (swept 3 LRs)</td><td>2.1904 → 2.3338 (best of sweep)</td><td><span class="badge lose">REJECTED</span></td></tr>
+<tr><td>3</td><td>Weight tying, byte vocab (256)</td><td>2.1904 → 2.2203</td><td><span class="badge lose">REJECTED</span></td></tr>
+<tr><td>4</td><td>Byte-level BPE tokenizer, vocab 2048</td><td>2.1904 → 1.9967</td><td><span class="badge win">WIN −8.8%</span></td></tr>
+<tr><td>5</td><td>Weight tying re-test, BPE vocab (2048)</td><td>1.9967 → 2.0257</td><td><span class="badge lose">REJECTED (again)</span></td></tr>
+<tr><td>6</td><td>Batch size 8 → 32</td><td>1.9967 → 1.7863</td><td><span class="badge win">WIN −10.5%</span></td></tr>
+<tr><td>7</td><td>QK-Norm (RMSNorm on Q/K before attention), on Run 6's cosine schedule</td><td>1.7863 → 1.785</td><td><span class="badge lose">negligible (−0.07%, within noise)</span></td></tr>
+<tr><td>8</td><td>RoPE positional encoding</td><td>1.7863 → 1.7554</td><td><span class="badge win">WIN −1.7%</span></td></tr>
+<tr><td>9</td><td>WSD (warmup-stable-decay) schedule</td><td>1.7863 → 1.7575</td><td><span class="badge win">WIN −1.6%</span></td></tr>
+<tr><td>10</td><td>Muon optimizer (Newton-Schulz orthogonalized updates)</td><td>1.7863 → 1.7374</td><td><span class="badge win">WIN −2.7%</span></td></tr>
+<tr><td>11</td><td>Batch size 32 → 64 (~3.52 epochs of the corpus)</td><td>&mdash;</td><td><span class="badge pending">killed mid-run, unscored (deadline)</span></td></tr>
+<tr><td>Final</td><td>RoPE + Muon + WSD, stacked</td><td>1.7863 → <strong>1.7328</strong></td><td><span class="badge win">WIN −3.0% (submitted)</span></td></tr>
+</tbody>
+</table>
+
+<div class="note">
+Two ideas were investigated and explicitly <strong>not</strong> run, with reasoning logged rather than silently dropped: <strong>SOAP</strong> (real optimizer, but its RUNLOG-cited description was a garbled paraphrase — the actual mechanism is higher implementation risk than Muon for the same hypothesis, at this step/param budget) and <strong>QK-Normed MLA</strong> (real paper, but solves a caching problem specific to Multi-Latent Attention, which this project doesn't use — adopting MLA just to unlock the trick was judged out of scope). See <code>RUNLOG.md</code>'s Literature Review sections for the full verification trail against primary sources.
+</div>
+
+<h2>Human vs. machine work split</h2>
+<p>The coding agent wrote all of the code. The literature review and the direction of every change &mdash; what to try, in what order, and what to do with the results &mdash; came from the human.</p>
+<ul>
+  <li><strong>Agent (Claude Code):</strong> all code &mdash; tokenizer, model, training loop, optimizers (including Muon/NorMuon) &mdash; plus running and scoring every training run and writing <code>RUNLOG.md</code> and this document.</li>
+  <li><strong>Human:</strong> literature review and primary-source verification for every externally-suggested technique, and direction on what to change, in what order, and what to do with each result (including the call to kill and re-sequence the oversubscribed parallel runs, and which conditional experiments to run given the deadline).</li>
+</ul>
+
+</body>
+</html>
