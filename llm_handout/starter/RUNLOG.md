@@ -71,8 +71,6 @@ Checked citations against the actual papers before queuing anything, since exter
 
 A few other optimizer/attention papers (SOAP, NorMuon, an MLA-specific QK-norm variant, a data-reuse scheduling paper) were also checked against primary sources but none of them ended up in the final config, so they're left out here rather than padding the log with citations for things we didn't ship.
 
-**Correction, later:** re-checked Muennighoff against the actual PDF, not just the abstract. Earlier phrasing above overstated it as a "4-epoch hard ceiling" - the real numbers are: negligible loss difference up to 4 epochs, but gains keep coming until ~16. The paper also doesn't test regularization as a fix for repeated-data degradation - that's an untested aside from the authors, not a result.
-
 ---
 
 ## Run 9 - WSD schedule
