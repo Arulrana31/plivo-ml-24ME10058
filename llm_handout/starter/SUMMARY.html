@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>2,000-Step LLM Speedrun — Summary</title>
+<title>2,000-Step LLM Speedrun - Summary</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -40,13 +40,13 @@
 </head>
 <body>
 
-<h1>2,000-Step LLM Speedrun — Summary</h1>
+<h1>2,000-Step LLM Speedrun - Summary</h1>
 <p class="subtitle">Bits-per-byte (bpb) minimization under a 2,000-optimizer-step / 2,000,000-parameter cap, CPU-only, pure PyTorch. See <code>RUNLOG.md</code> for the full run-by-run trail and <code>NOTES.md</code> for the condensed writeup.</p>
 
 <div class="final-flag">
   <strong>Final submitted checkpoint.</strong><br>
-  Best config: RoPE + Muon + WSD schedule + batch 64, stacked on top of the BPE-tokenizer base &mdash;
-  dev bpb <strong>1.6777</strong> (baseline was 2.3718 &mdash; &minus;29.3% relative).
+  Best config: RoPE + Muon + WSD schedule + batch 64, stacked on top of the BPE-tokenizer base -
+  dev bpb <strong>1.6777</strong> (baseline was 2.3718, -29.3% relative).
 </div>
 
 <h2>Best configuration &amp; why</h2>
@@ -57,13 +57,13 @@
   <div class="card"><div class="num">4 / 4 / 160</div><div class="label">layers / heads / n_embd</div></div>
 </div>
 <ul>
-  <li><strong>Tokenizer:</strong> from-scratch byte-level BPE (vocab 2048), trained only on <code>train_corpus.txt</code>, Unicode-category-aware pre-tokenization (fixes Devanagari matra/virama fragmentation that plain <code>\w</code> regex splitting causes), byte-level fallback base vocab &mdash; structurally lossless on arbitrary UTF-8 by construction.</li>
-  <li><strong>Positional encoding:</strong> RoPE instead of a learned absolute position table &mdash; better bpb and 20,480 fewer params (Run 8).</li>
-  <li><strong>Optimizer:</strong> Muon (Newton-Schulz orthogonalized updates) on the hidden 2D weights, AdamW on everything else &mdash; the single biggest individual win of the project (Run 10).</li>
-  <li><strong>Schedule:</strong> WSD (warmup-stable-decay) &mdash; beat cosine decay by holding LR high longer before a sharp final decay (Run 9).</li>
-  <li><strong>Batch size:</strong> 64 (up from the baseline's 8) &mdash; the step budget is the binding constraint, not compute, so more distinct tokens per step matters more than gradient-noise reduction. Batch 32 won first (Run 6); batch 64 was re-tested on top of the full stack and won again (~4.8 epochs of the corpus, within Muennighoff's safe repeated-data range).</li>
-  <li><strong>Architecture:</strong> unchanged 4-layer/4-head/160-dim transformer, untied input/output embeddings (weight tying was tested twice, at two vocab sizes, and rejected both times &mdash; see RUNLOG Runs 3 &amp; 5), flat N(0, 0.05) init (GPT-2/muP-style scaled init was tested and rejected &mdash; see Run 2).</li>
-  <li><strong>Stacking:</strong> RoPE, Muon, and WSD were each validated individually first, then combined &mdash; the combination beat every individual result cleanly. Batch 64 was then re-tested on top of that combined stack and won again.</li>
+  <li><strong>Tokenizer:</strong> from-scratch byte-level BPE (vocab 2048), trained only on <code>train_corpus.txt</code>, Unicode-category-aware pre-tokenization (fixes Devanagari matra/virama fragmentation that plain <code>\w</code> regex splitting causes), byte-level fallback base vocab - structurally lossless on arbitrary UTF-8 by construction.</li>
+  <li><strong>Positional encoding:</strong> RoPE instead of a learned absolute position table - better bpb and 20,480 fewer params (Run 8).</li>
+  <li><strong>Optimizer:</strong> Muon (Newton-Schulz orthogonalized updates) on the hidden 2D weights, AdamW on everything else - the single biggest individual win of the project (Run 10).</li>
+  <li><strong>Schedule:</strong> WSD (warmup-stable-decay) - beat cosine decay by holding LR high longer before a sharp final decay (Run 9).</li>
+  <li><strong>Batch size:</strong> 64 (up from the baseline's 8) - the step budget is the binding constraint, not compute, so more distinct tokens per step matters more than gradient-noise reduction. Batch 32 won first (Run 6); batch 64 was re-tested on top of the full stack and won again (~4.8 epochs of the corpus, within Muennighoff's safe repeated-data range).</li>
+  <li><strong>Architecture:</strong> unchanged 4-layer/4-head/160-dim transformer, untied input/output embeddings (weight tying was tested twice, at two vocab sizes, and rejected both times - see RUNLOG Runs 3 &amp; 5), flat N(0, 0.05) init (GPT-2/muP-style scaled init was tested and rejected - see Run 2).</li>
+  <li><strong>Stacking:</strong> RoPE, Muon, and WSD were each validated individually first, then combined - the combination beat every individual result cleanly. Batch 64 was then re-tested on top of that combined stack and won again.</li>
 </ul>
 
 <h2>Run history</h2>
@@ -81,20 +81,16 @@
 <tr><td>8</td><td>RoPE positional encoding</td><td>1.7863 → 1.7554</td><td><span class="badge win">WIN −1.7%</span></td></tr>
 <tr><td>9</td><td>WSD (warmup-stable-decay) schedule</td><td>1.7863 → 1.7575</td><td><span class="badge win">WIN −1.6%</span></td></tr>
 <tr><td>10</td><td>Muon optimizer (Newton-Schulz orthogonalized updates)</td><td>1.7863 → 1.7374</td><td><span class="badge win">WIN −2.7%</span></td></tr>
-<tr><td>11</td><td>Batch size 32 → 64, isolated on Run 6</td><td>&mdash;</td><td><span class="badge pending">killed mid-run, unscored (deadline)</span></td></tr>
+<tr><td>11</td><td>Batch size 32 → 64, isolated on Run 6</td><td>-</td><td><span class="badge pending">killed mid-run, unscored (deadline)</span></td></tr>
 <tr><td>Stack v1</td><td>RoPE + Muon + WSD, stacked</td><td>1.7863 → 1.7328</td><td><span class="badge win">WIN −3.0%</span></td></tr>
 <tr><td>Stack v2</td><td>RoPE + Muon + WSD + batch 64</td><td>1.7863 → <strong>1.6777</strong></td><td><span class="badge win">WIN −6.1% (submitted)</span></td></tr>
 </tbody>
 </table>
 
-<div class="note">
-Two ideas were investigated and explicitly <strong>not</strong> run, with reasoning logged rather than silently dropped: <strong>SOAP</strong> (real optimizer, but its RUNLOG-cited description was a garbled paraphrase — the actual mechanism is higher implementation risk than Muon for the same hypothesis, at this step/param budget) and <strong>QK-Normed MLA</strong> (real paper, but solves a caching problem specific to Multi-Latent Attention, which this project doesn't use — adopting MLA just to unlock the trick was judged out of scope). See <code>RUNLOG.md</code>'s Literature Review sections for the full verification trail against primary sources.
-</div>
-
 <h2>Human vs. machine work split</h2>
-<p>The coding agent wrote all of the code. The literature review and the direction of every change &mdash; what to try, in what order, and what to do with the results &mdash; came from the human.</p>
+<p>The coding agent wrote all of the code. The literature review and the direction of every change - what to try, in what order, and what to do with the results - came from the human.</p>
 <ul>
-  <li><strong>Agent (Claude Code):</strong> all code &mdash; tokenizer, model, training loop, optimizers (including Muon/NorMuon) &mdash; plus running and scoring every training run and writing <code>RUNLOG.md</code> and this document.</li>
+  <li><strong>Agent (Claude Code):</strong> all code - tokenizer, model, training loop, optimizers (including Muon/NorMuon) - plus running and scoring every training run and writing <code>RUNLOG.md</code> and this document.</li>
   <li><strong>Human:</strong> literature review and primary-source verification for every externally-suggested technique, and direction on what to change, in what order, and what to do with each result (including the call to kill and re-sequence the oversubscribed parallel runs, and which conditional experiments to run given the deadline).</li>
 </ul>
 

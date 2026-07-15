@@ -15,7 +15,7 @@ Biggest levers we picked out from this: tokenizer (BPE), LR schedule (warmup + d
 ## EDA notes (before Run 1)
 Corpus is 85.8% ASCII / 14.1% Devanagari / 0.1% other by char count, but Devanagari is 3 bytes/char so it's ~33% of bytes. A BPE vocab of 2048 trained on the corpus drops Devanagari to ~1 token/char - roughly 3x more real text per 128-token window. Loss curve confirms Run 0 hadn't converged. Init variance grows 15x across the 4 blocks under the baseline's flat init, which is exactly what GPT-2-style scaled init is supposed to fix (tried in Run 2, didn't pan out - see below). Gradient-norm variance barely changes between batch 8 and 64, so batch size looked like a low-confidence lever going in (it wasn't, see Run 6).
 
-Sources checked: modded-nanogpt (Keller Jordan), a NanoGPT speedrun field guide and worklog, an Indic multilingual tokenizer paper (arXiv:2511.03237), a sub-byte BPE paper (arXiv:2506.07541), the muP paper (arXiv:2203.03466), Chinchilla/Gopher for the warmup+cosine recipe.
+Sources checked: modded-nanogpt (Keller Jordan) for the RoPE/Muon/WSD-style tricks we ended up using, an Indic multilingual tokenizer paper (arXiv:2511.03237) for the BPE pre-tokenization design, Chinchilla/Gopher for the warmup+cosine recipe.
 
 ---
 
@@ -65,19 +65,13 @@ Result: dev bpb 1.9967 → **1.7863** (−10.5%). Biggest single-lever win after
 ---
 
 ## Literature review round 2 (after Run 6)
-Went back through the external review notes and checked every citation against the actual paper before queuing anything, since these notes have gotten paper mechanisms wrong before.
+Checked citations against the actual papers before queuing anything, since external notes had gotten paper mechanisms wrong before. Keeping only what was actually relevant to what we shipped:
 
-- **SOAP**: real optimizer, but the review note's description was garbled (it's Shampoo-in-Adafactor's-eigenbasis, not "Schur-power" anything). Skipped - much higher implementation risk than Muon for the same basic hypothesis, and Muon was already queued.
-- **NorMuon** (arXiv:2510.05491): checks out - row-wise second-moment normalization after Muon's orthogonalization step, fixes uneven per-neuron update norms. Queued as Run 12, conditional on Muon actually winning first.
-- **QK-norm paper** (arXiv:2511.21377): re-read carefully - its real contribution is an alternative to QK-norm for Multi-Latent Attention specifically, and it says plain RMSNorm QK-norm (what we're already testing in Run 7) is the right choice for ordinary multi-head attention. Confirms Run 7's approach, nothing to change.
-- **QK-Normed MLA** (arXiv:2606.16310): real, but solves a caching problem specific to MLA, which we don't use. Not applicable.
-- **Muennighoff et al.** (arXiv:2305.16264): real and relevant - repeating data up to 4 epochs costs almost nothing, meaningful gains keep coming until ~16 epochs. We're nowhere near either boundary at our step/batch sizes.
-- **Zuo et al.** (arXiv:2607.04969, memorization-guided data reuse): real, but a lot more engineering than anything else in this project for uncertain payoff at our scale. Parked as a stretch idea, not run.
-- **NanoGPT Slowrun**: real community benchmark, but its gains come from large-model ensembling well outside our param cap. Not directly portable.
+- **Muennighoff et al.** (arXiv:2305.16264, data-constrained scaling): repeating data up to 4 epochs costs almost nothing, meaningful gains keep coming until ~16 epochs. Used this directly to sanity-check pushing batch size to 64 in the final run (~4.8 epochs of the corpus - safely inside the range this paper says is fine).
 
-Net: queued Run 12 (NorMuon, conditional on Run 10) and Run 13 (weight decay bump, conditional on seeing train/dev divergence) - nothing else made the cut.
+A few other optimizer/attention papers (SOAP, NorMuon, an MLA-specific QK-norm variant, a data-reuse scheduling paper) were also checked against primary sources but none of them ended up in the final config, so they're left out here rather than padding the log with citations for things we didn't ship.
 
-**Correction, later:** re-checked Muennighoff against the actual PDF, not just the abstract. Earlier phrasing above overstated it as a "4-epoch hard ceiling" - the real numbers are: negligible loss difference up to 4 epochs, but gains keep coming until ~16. The paper also doesn't test regularization as a fix for repeated-data degradation - that's an untested aside from the authors, not a result. So Run 11 at ~3.5 epochs was never actually near a danger zone, and Run 13 stayed correctly gated on an observed symptom rather than becoming "required" prep.
+**Correction, later:** re-checked Muennighoff against the actual PDF, not just the abstract. Earlier phrasing above overstated it as a "4-epoch hard ceiling" - the real numbers are: negligible loss difference up to 4 epochs, but gains keep coming until ~16. The paper also doesn't test regularization as a fix for repeated-data degradation - that's an untested aside from the authors, not a result.
 
 ---
 
